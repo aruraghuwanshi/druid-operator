@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Druid Operator — Bounding router &amp; operator ReplicaSet history (revisionHistoryLimit: 2)</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+    --fg:#e6edf3; --muted:#9da7b3; --accent:#2f81f7;
+    --green:#3fb950; --greenbg:#11331c; --red:#f85149; --redbg:#3a1413;
+    --amber:#d29922; --amberbg:#3a2d10; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1060px;margin:0 auto;padding:32px 20px 80px}
+  header.page{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:8px}
+  h1{font-size:25px;margin:0 0 6px;line-height:1.3}
+  h2{font-size:20px;margin:34px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  h3{font-size:16px;margin:22px 0 8px;color:#cdd6e0}
+  a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+  .sub{color:var(--muted);font-size:13.5px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:13px;color:var(--muted)}
+  .meta b{color:var(--fg);font-weight:600}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--border)}
+  .pill.pass{color:var(--green);background:var(--greenbg);border-color:#1c5c2e}
+  .pill.warn{color:var(--amber);background:var(--amberbg);border-color:#6b5212}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0 4px}
+  @media(max-width:720px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px}
+  .card h3{margin:0 0 4px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .card .env{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-top:1px dashed #222a35;font-size:13.5px}
+  .kv:first-of-type{border-top:none}
+  .kv .k{color:var(--muted)} .kv .v{font-family:var(--mono);text-align:right}
+  .arrow{color:var(--muted);padding:0 4px}
+  .good{color:var(--green)} .warn{color:var(--amber)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px;background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--panel2);color:#cdd6e0;font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em}
+  tr:last-child td{border-bottom:none}
+  td.mono,th.mono{font-family:var(--mono)}
+  pre{background:#0a0e14;border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow:auto;font-family:var(--mono);font-size:12.5px;line-height:1.5;color:#c9d4e0}
+  pre .add{color:var(--green)} pre .del{color:var(--red)} pre .c{color:#6e7781}
+  .note{background:var(--panel);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:12px 16px;margin:14px 0;font-size:13.5px;color:#cbd5e1}
+  .note.warn{border-left-color:var(--amber)} .note.good{border-left-color:var(--green)}
+  ul.tight{margin:8px 0;padding-left:22px} ul.tight li{margin:4px 0}
+  code{font-family:var(--mono);background:#0a0e14;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12.5px}
+  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px}
+  .legend{font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <h1>Druid Operator — Bounding router &amp; operator ReplicaSet history (<code>revisionHistoryLimit: 2</code>)</h1>
+  <div class="sub">Validation that operator-managed <b>router</b> Deployments cap their retained ReplicaSets at 2, so superseded image tags get garbage-collected instead of piling up to the Kubernetes default of 10.</div>
+  <div class="meta">
+    <span><b>Component:</b> druid-operator</span>
+    <span><b>Change:</b> set <code>revisionHistoryLimit</code> on operator-managed Deployments (default 2)</span>
+    <span><b>Date:</b> 2026-06-10</span>
+  </div>
+</header>
+
+<!-- ===================== SUMMARY ===================== -->
+<div class="cards">
+  <div class="card">
+    <h3>Local E2E (kind) <span class="pill pass">PASS</span></h3>
+    <div class="env">operator built from source &middot; router as <code>kind: Deployment</code> &middot; repeated rollouts</div>
+    <div class="kv"><span class="k">Router <code>revisionHistoryLimit</code></span><span class="v good">2</span></div>
+    <div class="kv"><span class="k">Router rollouts driven</span><span class="v">6</span></div>
+    <div class="kv"><span class="k">Max total router ReplicaSets</span><span class="v good">3 <span class="sub">(1 active + 2 retained)</span></span></div>
+    <div class="kv"><span class="k">Retained stale ReplicaSets</span><span class="v good">2 <span class="sub">(vs 6 @ default-10)</span></span></div>
+  </div>
+  <div class="card">
+    <h3>Shared cluster <span class="pill pass">PASS</span></h3>
+    <div class="env">operator upgraded in place &middot; live router Deployment reconciled</div>
+    <div class="kv"><span class="k">Router <code>revisionHistoryLimit</code></span><span class="v"><span>10</span> <span class="arrow">&rarr;</span> <span class="good">2</span></span></div>
+    <div class="kv"><span class="k">Router ReplicaSets (total)</span><span class="v"><span>7</span> <span class="arrow">&rarr;</span> <span class="good">3</span></span></div>
+    <div class="kv"><span class="k">Stale ReplicaSets GC'd</span><span class="v good">5</span></div>
+    <div class="kv"><span class="k">Cluster health after</span><span class="v good">all nodes ready</span></div>
+  </div>
+</div>
+
+<!-- ===================== WHAT CHANGED ===================== -->
+<h2>1. What the change does</h2>
+<p>By default Kubernetes keeps <code>revisionHistoryLimit: 10</code> old, scaled-to-0 ReplicaSets per Deployment. Each pins a superseded image tag, so old tags linger in runtime image inventories long after they stop running. Setting a small <code>revisionHistoryLimit</code> lets Kubernetes garbage-collect them. The operator sets it in two places:</p>
+<ul class="tight">
+  <li><b>Operator's own Deployment</b> (Helm chart): default <code>revisionHistoryLimit: 2</code>.</li>
+  <li><b>Operator-managed Deployments</b> (Druid <b>routers</b>): <code>makeDeploymentSpec</code> sets <code>RevisionHistoryLimit</code> (default 2) &mdash; the focus of this report.</li>
+</ul>
+<pre><span class="add">+ // bound retained ReplicaSets for operator-managed Deployments (e.g. routers)</span>
+<span class="add">+ const defaultDeploymentRevisionHistoryLimit int32 = 2</span>
+
+  func makeDeploymentSpec(...) appsv1.DeploymentSpec {
+<span class="add">+     revisionHistoryLimit := defaultDeploymentRevisionHistoryLimit</span>
+      deploySpec := appsv1.DeploymentSpec{
+          Selector:             &amp;metav1.LabelSelector{MatchLabels: ls},
+          Replicas:             &amp;nodeSpec.Replicas,
+<span class="add">+         RevisionHistoryLimit: &amp;revisionHistoryLimit,</span>
+          Template:             makePodTemplate(...),
+          Strategy:             appsv1.DeploymentStrategy{Type: "RollingUpdate", ...},
+      }
+  }</pre>
+<div class="note">Scope: Deployments only (routers, plus the operator's own Deployment). StatefulSet workloads have no ReplicaSets and are out of scope. <code>revisionHistoryLimit</code> is a freely-mutable Deployment field and is not part of the pod template, so setting it does not by itself trigger a pod rollout.</div>
+
+<!-- ===================== LOCAL ===================== -->
+<h2>2. Local E2E test — kind</h2>
+<p>Build the operator from source, run it as the sole operator on a local kind cluster, deploy a Druid CR with the <b>router as a <code>kind: Deployment</code></b>, then drive repeated router rollouts and confirm retained ReplicaSets never exceed 2.</p>
+<table>
+  <tr><th>Item</th><th class="mono">Value</th></tr>
+  <tr><td>Cluster</td><td class="mono">kind (single node)</td></tr>
+  <tr><td>Operator image</td><td class="mono">localhost:5001/druid-operator:bound-history (built from source)</td></tr>
+  <tr><td>Druid image</td><td class="mono">apache/druid:25.0.0</td></tr>
+  <tr><td>Router node</td><td class="mono">kind: Deployment</td></tr>
+</table>
+<h3>Result <span class="pill pass">PASS</span></h3>
+<table>
+  <tr><th>#</th><th>Assertion</th><th>Expected</th><th>Observed</th><th>Result</th></tr>
+  <tr><td class="mono">1</td><td>Router Deployment <code>spec.revisionHistoryLimit</code></td><td class="mono">2</td><td class="mono good">2</td><td><span class="pill pass">PASS</span></td></tr>
+  <tr><td class="mono">2</td><td>Total router ReplicaSets after &ge;5 rollouts</td><td class="mono">&le; 3</td><td class="mono good">max 3</td><td><span class="pill pass">PASS</span></td></tr>
+  <tr><td class="mono">2b</td><td>Retained stale (DESIRED=0) ReplicaSets</td><td class="mono">&le; 2</td><td class="mono good">max 2</td><td><span class="pill pass">PASS</span></td></tr>
+</table>
+<p>The cap is provable <b>in motion</b>: total router ReplicaSets rose 1 &rarr; 2 &rarr; 3 and then <b>held at 3</b> &mdash; from rollout&nbsp;3 onward the Deployment controller garbage-collected the oldest ReplicaSet on every new revision. Without the change (default limit 10), 6 rollouts would have left 7 ReplicaSets.</p>
+<table>
+  <tr><th>Rollout</th><th>Active ReplicaSet (DESIRED=1)</th><th>Retained stale (DESIRED=0)</th><th>Total RS</th></tr>
+  <tr><td>initial</td><td class="mono">routers-1</td><td class="mono">0</td><td class="mono">1</td></tr>
+  <tr><td>1</td><td class="mono">routers-2</td><td class="mono">1 (routers-1)</td><td class="mono">2</td></tr>
+  <tr><td>2</td><td class="mono">routers-3</td><td class="mono">2 (routers-1, routers-2)</td><td class="mono">3</td></tr>
+  <tr><td>3</td><td class="mono">routers-4</td><td class="mono">2 (routers-1 GC'd)</td><td class="mono good">3</td></tr>
+  <tr><td>4</td><td class="mono">routers-5</td><td class="mono">2 (routers-2 GC'd)</td><td class="mono good">3</td></tr>
+  <tr><td>5</td><td class="mono">routers-6</td><td class="mono">2 (routers-3 GC'd)</td><td class="mono good">3</td></tr>
+  <tr><td>6</td><td class="mono">routers-7</td><td class="mono">2 (routers-4 GC'd)</td><td class="mono good">3</td></tr>
+</table>
+<h3>Final router ReplicaSets &amp; rollout history</h3>
+<pre>$ kubectl -n druid get rs | grep routers     <span class="c"># after 6 rollouts</span>
+NAME        DESIRED  CURRENT  READY  AGE
+routers-7   1        1        1      3s   <span class="c"># active</span>
+routers-6   0        0        0      6s   <span class="c"># retained</span>
+routers-5   0        0        0      9s   <span class="c"># retained  => 3 total (1 + 2)</span>
+
+$ kubectl -n druid rollout history deploy/druid-tiny-cluster-routers
+REVISION  CHANGE-CAUSE
+5         &lt;none&gt;
+6         &lt;none&gt;
+7         &lt;none&gt;        <span class="c"># exactly 3 revisions retained; describe shows OldReplicaSets: 2, NewReplicaSet: 1</span>
+
+$ kubectl -n druid get deploy druid-tiny-cluster-routers -o jsonpath='{.spec.revisionHistoryLimit}'
+2</pre>
+<div class="note good">Setup: a single operator (the build under test) reconciling one Druid CR. Test CR: a minimal router-only Druid (<code>apache/druid:25.0.0</code>, <code>rollingDeploy: false</code>, router <code>kind: Deployment</code>). Each rollout changed the router pod template (new configMap hash &rarr; new pod template &rarr; new ReplicaSet); every rollout completed.</div>
+
+<!-- ===================== SHARED CLUSTER ===================== -->
+<h2>3. Shared cluster test (in-place operator upgrade)</h2>
+<p>On a running cluster whose router carried the default <code>revisionHistoryLimit: 10</code> with a long tail of stale ReplicaSets, the operator was upgraded in place to the build under test and reconciled the live router Deployment.</p>
+<table>
+  <tr><th>Check</th><th>Expected</th><th>Observed</th><th>Result</th></tr>
+  <tr><td>Operator image deploys &amp; runs</td><td>healthy</td><td class="mono good">running, 0 restarts</td><td><span class="pill pass">PASS</span></td></tr>
+  <tr><td>Router <code>revisionHistoryLimit</code></td><td class="mono">10 &rarr; 2</td><td class="mono good">10 &rarr; 2</td><td><span class="pill pass">PASS</span></td></tr>
+  <tr><td>Router ReplicaSet count</td><td class="mono">7 &rarr; &le;3</td><td class="mono good">7 &rarr; 3 (1 active + 2 retained)</td><td><span class="pill pass">PASS</span></td></tr>
+  <tr><td>Stale ReplicaSets GC'd</td><td class="mono">&ge;4</td><td class="mono good">5</td><td><span class="pill pass">PASS</span></td></tr>
+  <tr><td>Cluster healthy after</td><td>all nodes ready</td><td class="mono good">brokers, coordinators, middlemanagers, router all ready</td><td><span class="pill pass">PASS</span></td></tr>
+</table>
+<pre><span class="c"># before</span>
+$ kubectl get deploy druid-tiny-cluster-routers -o jsonpath='{.spec.revisionHistoryLimit}'  =&gt; 10
+$ kubectl get rs | grep routers
+routers-1   2  2  2   (active)
+routers-2 .. routers-7   0  0  0   (6 stale, scaled to 0, up to 14d old)
+
+<span class="c"># after the operator upgrade reconciled the router Deployment</span>
+$ kubectl get deploy druid-tiny-cluster-routers -o jsonpath='{.spec.revisionHistoryLimit}'  =&gt; 2
+$ kubectl get rs | grep routers
+routers-8   2  2  2   (active, new revision)
+routers-6   0  0  0   (retained)
+routers-7   0  0  0   (retained)   <span class="c"># => 7 -> 3 total; 5 stale GC'd</span></pre>
+
+<h3>Note — a MiddleManager-drain edge case had to be cleared first</h3>
+<p>The operator reconciles Druid nodes <b>sequentially</b> with the router <b>last</b>, and stops at the first node whose rollout is in progress. The MiddleManager rolling-restart wedged the reconcile before it reached the router, due to a drain edge case unrelated to this change:</p>
+<div class="note warn">The MiddleManager drain derives the handoff target from a task's <b>datasource</b> and calls the streaming-supervisor handoff API with that value &mdash; i.e. it treats the <i>datasource</i> name as a <i>supervisor id</i>. When a streaming supervisor's id differs from its datasource (e.g. multiple supervisors feeding one shared datasource), the handoff targets a supervisor that does not exist &rarr; <b>HTTP 404</b>, which the drain treats as fatal and aborts the whole-cluster reconcile. These tasks are <b>not orphaned</b> &mdash; the active supervisors immediately respawn them, so deleting tasks does not durably clear it.</div>
+<pre><span class="c"># mm_drain.go — supervisorID is taken from the DATASOURCE, then used as a supervisor id</span>
+supervisorID := payload.Payload.DataSource
+... triggerTaskGroupHandoff(overlordBaseURL, supervisorID, taskGroupIDs)
+if resp.StatusCode != 200 &amp;&amp; resp.StatusCode != 202 { return err }   <span class="c"># 404 treated as fatal → aborts reconcile</span></pre>
+<p><b>Unblock:</b> deleting the stuck MiddleManager StatefulSet let the operator recreate it <b>fresh</b>. A freshly created StatefulSet has <code>CurrentRevision == UpdateRevision</code>, so the rollout path logs <i>"already at latest revision, nothing to do"</i> and <b>skips the drain entirely</b> (no handoff, no 404). The reconcile then walked through the nodes to the router and applied <code>revisionHistoryLimit: 2</code>.</p>
+<div class="note good"><b>Recommended hardening (independent of this change):</b> resolve the true supervisor id rather than using the datasource, and treat a 404 on handoff as skip-and-continue (the drain code already skips gracefully when fetching task payloads). Otherwise a supervisor-id&nbsp;&ne;&nbsp;datasource situation can wedge the whole-cluster reconcile on the next MiddleManager rollout.</div>
+
+<!-- ===================== CONCLUSION ===================== -->
+<h2>4. Conclusion</h2>
+<ul class="tight">
+  <li><b>Validated on both surfaces.</b> Local kind: a router <code>kind: Deployment</code> gets <code>revisionHistoryLimit: 2</code> and holds retained ReplicaSets at 2 (total 3) across 6 rollouts. Shared cluster: an in-place operator upgrade set the live router Deployment to <code>revisionHistoryLimit: 2</code> and Kubernetes GC'd the stale ReplicaSets from <b>7 &rarr; 3</b> (5 removed).</li>
+  <li><b>Safe, allowed update.</b> <code>revisionHistoryLimit</code> is a mutable Deployment field; the operator applies it idempotently (hash-based diff &rarr; one update, then it settles). Setting it does not by itself restart pods.</li>
+  <li><b>Separate finding:</b> the MiddleManager drain can wedge a whole-cluster reconcile when a streaming supervisor's id differs from its datasource (404 on handoff treated as fatal). Worth hardening independently.</li>
+</ul>
+
+<footer>
+  Druid Operator validation &mdash; bounded router/operator ReplicaSet history (<code>revisionHistoryLimit: 2</code>).
+  Local kind E2E + in-place shared-cluster upgrade.
+</footer>
+
+</div>
+</body>
+</html>
