@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>druid-operator — configurable revisionHistoryLimit: local kind validation</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --border:#30363d; --fg:#e6edf3; --muted:#8b949e; --green:#2ea043; --blue:#388bfd; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:32px 20px 80px; }
+  h1 { font-size:23px; margin:0 0 4px; }
+  h2 { font-size:18px; margin:30px 0 10px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; background:rgba(46,160,67,.15); color:var(--green); border:1px solid rgba(46,160,67,.4); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin:14px 0; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  td code, .mono { color:var(--blue); }
+  pre { background:#010409; border:1px solid var(--border); border-radius:8px; padding:14px 16px; overflow:auto; font:12.5px/1.5 "SF Mono",ui-monospace,Menlo,Consolas,monospace; color:#c9d1d9; }
+  .ok { color:var(--green); font-weight:600; }
+  .meta td:first-child { color:var(--muted); width:210px; }
+  a { color:var(--blue); }
+  footer { color:var(--muted); font-size:12px; margin-top:40px; border-top:1px solid var(--border); padding-top:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Configurable <code>revisionHistoryLimit</code> — local kind validation <span class="pill">PASS</span></h1>
+  <p class="sub">End-to-end validation for <a href="https://github.com/apache/druid-operator/pull/24">apache/druid-operator#24</a> — exposing an optional <code>revisionHistoryLimit</code> on the Druid node spec and wiring it into the generated Deployment and StatefulSet.</p>
+
+  <div class="card">
+    <table class="meta">
+      <tr><td>Cluster</td><td><code>kind</code> — single node, Kubernetes <code>v1.35.0</code> (arm64)</td></tr>
+      <tr><td>Operator</td><td>built from this PR branch and deployed on the cluster</td></tr>
+      <tr><td>Workload under test</td><td>Druid CR <code>tiny-cluster</code> → router node (<code>kind: Deployment</code>) → <code>druid-tiny-cluster-routers</code></td></tr>
+      <tr><td>CRD</td><td><code>druids.druid.apache.org</code> (regenerated to include the new field)</td></tr>
+    </table>
+  </div>
+
+  <h2>Result matrix</h2>
+  <div class="card">
+  <table>
+    <tr><th>#</th><th>Assertion</th><th>Expected</th><th>Observed</th><th></th></tr>
+    <tr><td>1</td><td>CRD exposes <code>revisionHistoryLimit</code>; the value set on the CR is accepted (not pruned)</td><td>field present; CR stores the value</td><td>present; CR stored <code>4</code></td><td class="ok">PASS</td></tr>
+    <tr><td>2</td><td>Field <b>unset</b> on the node spec &rarr; Kubernetes default preserved</td><td><code>10</code></td><td>Deployment <code>revisionHistoryLimit = 10</code></td><td class="ok">PASS</td></tr>
+    <tr><td>3</td><td>Set <code>revisionHistoryLimit: 4</code> on the node spec &rarr; reflected on the generated Deployment</td><td>Deployment <code>= 4</code></td><td><code>10 &rarr; 4</code> within ~3s</td><td class="ok">PASS</td></tr>
+    <tr><td>4</td><td>Repeated rollouts &rarr; retained ReplicaSets garbage-collected to the configured limit</td><td>total &le; 5 (1 active + 4 retained)</td><td>capped at <b>5</b> across 6 rollouts (vs. climbing toward 10)</td><td class="ok">PASS</td></tr>
+  </table>
+  </div>
+
+  <h2>1 &amp; 2 &amp; 3 — the field is configurable and CR-driven</h2>
+<pre>$ kubectl get crd druids.druid.apache.org -o yaml | grep -c revisionHistoryLimit
+2                                              # field present in the CRD schema
+
+# Field UNSET on the node spec -> Kubernetes default (10)
+$ kubectl -n druid get deploy druid-tiny-cluster-routers -o jsonpath='{.spec.revisionHistoryLimit}'
+10
+
+# Set it on the node spec
+$ kubectl -n druid patch druid tiny-cluster --type merge \
+    -p '{"spec":{"nodes":{"routers":{"revisionHistoryLimit":4}}}}'
+druid.druid.apache.org/tiny-cluster patched
+$ kubectl -n druid get druid tiny-cluster -o jsonpath='{.spec.nodes.routers.revisionHistoryLimit}'
+4                                              # stored on the CR (not pruned)
+
+# Operator reconciles -> generated Deployment carries the value
+$ kubectl -n druid get deploy druid-tiny-cluster-routers -o jsonpath='{.spec.revisionHistoryLimit}'
+4                                              # 10 -> 4 within ~3s</pre>
+
+  <h2>4 — Kubernetes garbage-collects superseded ReplicaSets to the limit</h2>
+<pre># Roll the router repeatedly (each change cuts a new ReplicaSet); revisionHistoryLimit = 4
+starting router ReplicaSets = 3   (limit 4 -> expect cap at 5 = 1 active + 4 retained)
+rollout 1: total router RS = 4
+rollout 2: total router RS = 5
+rollout 3: total router RS = 5
+rollout 4: total router RS = 5
+rollout 5: total router RS = 5
+rollout 6: total router RS = 5    # capped at the limit; does NOT climb toward the default of 10
+
+$ kubectl -n druid get rs -o custom-columns=NAME:.metadata.name,DESIRED:.spec.replicas,CURRENT:.status.replicas | grep routers
+druid-tiny-cluster-routers-645f9b5c57   0   0    # retained
+druid-tiny-cluster-routers-6489dd7dbb   0   0    # retained
+druid-tiny-cluster-routers-697485cdb8   0   0    # retained
+druid-tiny-cluster-routers-7db87b4dc4   1   1    # active
+druid-tiny-cluster-routers-b75fbd9d5    0   0    # retained
+                                                 # 1 active + 4 retained = revisionHistoryLimit (4) + 1</pre>
+
+  <h2>Conclusion</h2>
+  <div class="card">
+    The operator reads <code>spec.nodes.&lt;node&gt;.revisionHistoryLimit</code> from the Druid CR and applies it to the generated workload's <code>spec.revisionHistoryLimit</code>. When unset, the Kubernetes default (10) is preserved; when set, the value is honored within seconds, and Kubernetes then garbage-collects superseded ReplicaSets (for Deployment node types) down to that limit. This bounds the retained pod-template history so superseded container image tags do not linger in image inventories and scanners. Backward-compatible (opt-in, <code>nil</code> &rarr; default), and validated alongside the PR's unit tests covering set / unset on both Deployment and StatefulSet node types.
+  </div>
+
+  <footer>Local kind validation for apache/druid-operator#24. Router-only minimal Druid cluster.</footer>
+</div>
+</body>
+</html>
